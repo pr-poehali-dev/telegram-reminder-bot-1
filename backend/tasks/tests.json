@@ -1,0 +1,35 @@
+{
+  "tests": [
+    {
+      "name": "Create new task",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "user_id": 1,
+        "title": "Test task",
+        "description": "Test description",
+        "interval": "1hour",
+        "priority": "high"
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "task": {
+          "id": "string",
+          "title": "Test task",
+          "status": "active"
+        }
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get user tasks",
+      "method": "GET",
+      "path": "/?user_id=1&status=active",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "tasks": "array"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Create or update user",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "telegram_id": 123456789,
+        "username": "testuser"
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "user": {
+          "id": "number",
+          "telegram_id": 123456789,
+          "level": 1
+        }
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get user by telegram_id",
+      "method": "GET",
+      "path": "/?telegram_id=123456789",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "user": {
+          "telegram_id": 123456789
+        }
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

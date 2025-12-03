@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Get user achievements",
+      "method": "GET",
+      "path": "/?user_id=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "achievements": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Update achievement progress",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "user_id": 1,
+        "achievement_id": 1,
+        "progress_increment": 1
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "progress": "number",
+        "unlocked": "boolean"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

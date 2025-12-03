@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 interface Task {
   id: string;
@@ -36,74 +37,12 @@ interface Achievement {
 const Index = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('tasks');
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: '1',
-      title: 'Позвонить клиенту',
-      description: 'Обсудить детали проекта',
-      interval: 'Каждый час',
-      status: 'active',
-      createdAt: new Date(),
-      priority: 'high',
-      reminderCount: 3
-    },
-    {
-      id: '2',
-      title: 'Отправить отчет',
-      description: 'Еженедельный отчет по задачам',
-      interval: 'Каждый день в 18:00',
-      assignedTo: '@username',
-      status: 'active',
-      createdAt: new Date(),
-      priority: 'medium',
-      reminderCount: 1
-    },
-    {
-      id: '3',
-      title: 'Обновить презентацию',
-      description: 'Добавить новые слайды',
-      interval: 'Каждые 30 минут',
-      status: 'overdue',
-      createdAt: new Date(),
-      priority: 'high',
-      reminderCount: 5
-    }
-  ]);
-
-  const [achievements, setAchievements] = useState<Achievement[]>([
-    {
-      id: '1',
-      title: 'Первые шаги',
-      description: 'Создайте первое задание',
-      icon: 'Sparkles',
-      progress: 100,
-      unlocked: true
-    },
-    {
-      id: '2',
-      title: 'Мастер продуктивности',
-      description: 'Выполните 10 заданий',
-      icon: 'Trophy',
-      progress: 40,
-      unlocked: false
-    },
-    {
-      id: '3',
-      title: 'Командный игрок',
-      description: 'Назначьте 5 заданий другим',
-      icon: 'Users',
-      progress: 60,
-      unlocked: false
-    },
-    {
-      id: '4',
-      title: 'Непобедимый',
-      description: 'Выполните 50 заданий',
-      icon: 'Zap',
-      progress: 16,
-      unlocked: false
-    }
-  ]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const DEMO_USER_ID = 1;
+  const DEMO_TELEGRAM_ID = 123456789;
 
   const [newTask, setNewTask] = useState({
     title: '',
@@ -113,9 +52,48 @@ const Index = () => {
     priority: 'medium' as 'low' | 'medium' | 'high'
   });
 
-  const [userLevel, setUserLevel] = useState(7);
-  const [userXP, setUserXP] = useState(245);
-  const [nextLevelXP] = useState(300);
+  const [userLevel, setUserLevel] = useState(1);
+  const [userXP, setUserXP] = useState(0);
+  const [nextLevelXP, setNextLevelXP] = useState(100);
+  
+  useEffect(() => {
+    loadData();
+  }, []);
+  
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      let user = await api.users.get(DEMO_TELEGRAM_ID).catch(() => null);
+      if (!user) {
+        user = await api.users.create(DEMO_TELEGRAM_ID, 'demo_user');
+      }
+      
+      setUserLevel(user.level);
+      setUserXP(user.xp);
+      setNextLevelXP(user.level * 100);
+      
+      const tasksData = await api.tasks.list(user.id);
+      setTasks(tasksData.map(t => ({
+        ...t,
+        createdAt: new Date(t.createdAt),
+        completedAt: t.completedAt ? new Date(t.completedAt) : undefined
+      })));
+      
+      const achievementsData = await api.achievements.list(user.id);
+      setAchievements(achievementsData);
+      
+    } catch (error) {
+      console.error('Failed to load data:', error);
+      toast({
+        title: "Ошибка загрузки",
+        description: "Не удалось загрузить данные",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const stats = {
     totalCompleted: 24,
@@ -124,23 +102,41 @@ const Index = () => {
     streak: 12
   };
 
-  const completeTask = (taskId: string) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId 
-        ? { ...task, status: 'completed' as const, completedAt: new Date() }
-        : task
-    ));
-    
-    setUserXP(prev => prev + 25);
-    
-    toast({
-      title: "🎉 Задание выполнено!",
-      description: "+25 XP. Так держать!",
-      className: "bg-gradient-to-r from-game-purple to-game-blue border-none text-white"
-    });
+  const completeTask = async (taskId: string) => {
+    try {
+      await api.tasks.update(taskId, 'completed');
+      
+      const updatedUser = await api.users.update(DEMO_USER_ID, 25, true);
+      setUserXP(updatedUser.xp);
+      setUserLevel(updatedUser.level);
+      setNextLevelXP(updatedUser.level * 100);
+      
+      await api.achievements.updateProgress(DEMO_USER_ID, 2, 1);
+      
+      setTasks(tasks.map(task => 
+        task.id === taskId 
+          ? { ...task, status: 'completed' as const, completedAt: new Date() }
+          : task
+      ));
+      
+      toast({
+        title: "🎉 Задание выполнено!",
+        description: "+25 XP. Так держать!",
+        className: "bg-gradient-to-r from-game-purple to-game-blue border-none text-white"
+      });
+      
+      loadData();
+    } catch (error) {
+      console.error('Failed to complete task:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось завершить задание",
+        variant: "destructive"
+      });
+    }
   };
 
-  const createTask = () => {
+  const createTask = async () => {
     if (!newTask.title) {
       toast({
         title: "Упс! 😅",
@@ -150,32 +146,40 @@ const Index = () => {
       return;
     }
 
-    const task: Task = {
-      id: Date.now().toString(),
-      title: newTask.title,
-      description: newTask.description,
-      interval: newTask.interval,
-      assignedTo: newTask.assignedTo || undefined,
-      status: 'active',
-      createdAt: new Date(),
-      priority: newTask.priority,
-      reminderCount: 0
-    };
+    try {
+      const createdTask = await api.tasks.create(DEMO_USER_ID, {
+        title: newTask.title,
+        description: newTask.description,
+        interval: newTask.interval,
+        assigned_to: newTask.assignedTo || undefined,
+        priority: newTask.priority
+      });
+      
+      await api.achievements.updateProgress(DEMO_USER_ID, 1, 1);
 
-    setTasks([task, ...tasks]);
-    setNewTask({
-      title: '',
-      description: '',
-      interval: '30min',
-      assignedTo: '',
-      priority: 'medium'
-    });
+      setNewTask({
+        title: '',
+        description: '',
+        interval: '30min',
+        assignedTo: '',
+        priority: 'medium'
+      });
 
-    toast({
-      title: "✨ Задание создано!",
-      description: "Бот начнёт отправлять напоминания",
-      className: "bg-gradient-to-r from-game-orange to-game-gold border-none text-white"
-    });
+      toast({
+        title: "✨ Задание создано!",
+        description: "Бот начнёт отправлять напоминания",
+        className: "bg-gradient-to-r from-game-orange to-game-gold border-none text-white"
+      });
+      
+      loadData();
+    } catch (error) {
+      console.error('Failed to create task:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось создать задание",
+        variant: "destructive"
+      });
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -195,6 +199,17 @@ const Index = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-purple-50/30 to-blue-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-game-purple border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-lg text-muted-foreground">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-purple-50/30 to-blue-50/30 dark:from-background dark:via-purple-950/20 dark:to-blue-950/20">
       <div className="container max-w-6xl mx-auto py-8 px-4">
